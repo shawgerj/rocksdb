@@ -126,7 +126,7 @@ Status DBImpl::MultiBatchWriteImpl(const WriteOptions& write_options,
               total_byte_size, WriteBatchInternal::ByteSize(w->batches));
         }
       }
-      if (writer.disable_wal) {
+      if (writer.disable_wal && !fail_on_write_) {
         has_unpersisted_data_.store(true, std::memory_order_relaxed);
       }
       write_thread_.UpdateLastSequence(current_sequence + total_count - 1);
@@ -492,7 +492,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     }
     RecordInHistogram(stats_, BYTES_PER_WRITE, total_byte_size);
 
-    if (write_options.disableWAL) {
+    if (write_options.disableWAL && !fail_on_write_) {
       has_unpersisted_data_.store(true, std::memory_order_relaxed);
     }
 
@@ -676,7 +676,7 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
               total_byte_size, WriteBatchInternal::ByteSize(writer->batch));
         }
       }
-      if (w.disable_wal) {
+      if (w.disable_wal && !fail_on_write_) {
         has_unpersisted_data_.store(true, std::memory_order_relaxed);
       }
       write_thread_.UpdateLastSequence(current_sequence + total_count - 1);
@@ -784,7 +784,7 @@ Status DBImpl::UnorderedWriteMemtable(const WriteOptions& write_options,
         true /*concurrent_memtable_writes*/, seq_per_batch_, sub_batch_cnt);
 
     WriteStatusCheck(w.status);
-    if (write_options.disableWAL) {
+    if (write_options.disableWAL && !fail_on_write_) {
       has_unpersisted_data_.store(true, std::memory_order_relaxed);
     }
   }

@@ -2720,6 +2720,12 @@ void rocksdb_options_set_ratelimiter(rocksdb_options_t *opt, rocksdb_ratelimiter
   }
 }
 
+    // shawgerj
+void rocksdb_options_set_fail_on_write(rocksdb_options_t* opt,
+                                       unsigned char fail_on_write) {
+    opt->rep.fail_on_write = fail_on_write;
+}
+
 rocksdb_ratelimiter_t* rocksdb_ratelimiter_create(
     int64_t rate_bytes_per_sec,
     int64_t refill_period_us,

@@ -208,6 +208,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       opened_successfully_(false),
       two_write_queues_(options.two_write_queues),
       manual_wal_flush_(options.manual_wal_flush),
+      fail_on_write_(options.fail_on_write),
       // last_sequencee_ is always maintained by the main queue that also writes
       // to the memtable. When two_write_queues_ is disabled last seq in
       // memtable is the same as last seq published to the readers. When it is

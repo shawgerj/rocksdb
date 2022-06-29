@@ -1891,7 +1891,8 @@ class DBImpl : public DB {
   // In 2PC these are the writes at Prepare phase.
   const bool two_write_queues_;
   const bool manual_wal_flush_;
-
+  const bool fail_on_write_;
+  
   // LastSequence also indicates last published sequence visibile to the
   // readers. Otherwise LastPublishedSequence should be used.
   const bool last_seq_same_as_publish_seq_;

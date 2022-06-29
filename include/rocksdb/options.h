@@ -1136,6 +1136,9 @@ struct DBOptions {
   //
   // Default: 0
   size_t log_readahead_size = 0;
+
+  // shawgerj add
+  bool fail_on_write = false;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
