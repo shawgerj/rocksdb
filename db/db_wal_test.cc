@@ -165,6 +165,50 @@ TEST_F(DBWALTest, WAL) {
   } while (ChangeWalOptions());
 }
 
+    // shawgerj: if fail_on_write is enabled, data should be lost when we restart the db
+TEST_F(DBWALTest, WAL_failonwrite) {
+  do {
+    Options opts = CurrentOptions();
+    opts.fail_on_write = true;
+    CreateAndReopenWithCF({"pikachu"}, opts);
+    WriteOptions writeOpt = WriteOptions();
+    writeOpt.disableWAL = true;
+    ASSERT_OK(dbfull()->Put(writeOpt, handles_[1], "foo", "v1"));
+    ASSERT_OK(dbfull()->Put(writeOpt, handles_[1], "bar", "v1"));
+
+    Close();
+    ReopenWithColumnFamilies({"default", "pikachu"}, opts);
+    
+    ReadOptions ropt;
+    std::string value;
+    ASSERT_TRUE(dbfull()->Get(ropt, handles_[1], "foo", &value).IsNotFound());
+    ASSERT_TRUE(dbfull()->Get(ropt, handles_[1], "bar", &value).IsNotFound());
+  } while (ChangeWalOptions());
+}
+
+TEST_F(DBWALTest, WAL_nofailonwrite) {
+  do {
+    Options opts = CurrentOptions();
+    opts.fail_on_write = false;
+    CreateAndReopenWithCF({"pikachu"}, opts);
+    WriteOptions writeOpt = WriteOptions();
+    writeOpt.disableWAL = true;
+    ASSERT_OK(dbfull()->Put(writeOpt, handles_[1], "foo", "v1"));
+    ASSERT_OK(dbfull()->Put(writeOpt, handles_[1], "bar", "v1"));
+
+    Close();
+    ReopenWithColumnFamilies({"default", "pikachu"}, opts);
+    
+    ReadOptions ropt;
+    std::string value;
+    ASSERT_TRUE(dbfull()->Get(ropt, handles_[1], "foo", &value).ok());
+    ASSERT_EQ("v1", value);
+    ASSERT_TRUE(dbfull()->Get(ropt, handles_[1], "bar", &value).ok());
+    ASSERT_EQ("v1", value);
+  } while (ChangeWalOptions());
+}
+
+
 TEST_F(DBWALTest, RollLog) {
   do {
     CreateAndReopenWithCF({"pikachu"}, CurrentOptions());
