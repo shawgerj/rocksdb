@@ -25,6 +25,7 @@
 #include <vector>
 #include "rocksdb/status.h"
 #include "rocksdb/thread_status.h"
+//#include "test_util/fault_injection_test_env.h"
 
 #ifdef _WIN32
 // Windows API macro interference
@@ -1597,6 +1598,12 @@ Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname);
 // operations, reporting results to variables in PerfContext.
 // This is a factory method for TimedEnv defined in utilities/env_timed.cc.
 Env* NewTimedEnv(Env* base_env);
+
+// Returns a new FaultInjectionTestEnv, now exposed publically for use in TiKV
+// testing
+Env* NewFaultInjectionEnv();
+//   return new FaultInjectionTestEnv(base_env ? base_env.get() : Env::Default());
+// }
 
 // Returns an instance of logger that can be used for storing informational
 // messages.
