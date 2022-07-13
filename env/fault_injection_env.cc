@@ -17,8 +17,8 @@
 
 namespace rocksdb {
 
-Env* NewFaultInjectionEnv();
-   return new FaultInjectionEnv(Env::Default());
+FaultInjectionEnv* NewFaultInjectionEnv(Env* base) {
+   return new FaultInjectionEnv(base);
 }
 
 // Assume a filename, and not a directory name like "/foo/bar/"

@@ -562,6 +562,7 @@ set(SOURCES
         env/env_hdfs.cc
         env/env_inspected.cc
         env/mock_env.cc
+        env/fault_injection_env.cc
         file/delete_scheduler.cc
         file/file_util.cc
         file/filename.cc

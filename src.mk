@@ -69,6 +69,7 @@ LIB_SOURCES =                                                   \
   env/env_hdfs.cc                                               \
   env/env_inspected.cc                                          \
   env/env_posix.cc                                              \
+  env/fault_injection_env.cc                                    \
   env/io_posix.cc                                               \
   env/mock_env.cc                                               \
   file/delete_scheduler.cc                                      \

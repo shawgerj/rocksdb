@@ -1601,9 +1601,7 @@ Env* NewTimedEnv(Env* base_env);
 
 // Returns a new FaultInjectionTestEnv, now exposed publically for use in TiKV
 // testing
-Env* NewFaultInjectionEnv();
-//   return new FaultInjectionTestEnv(base_env ? base_env.get() : Env::Default());
-// }
+//FaultInjectionEnv* NewFaultInjectionEnv(Env* base_env);
 
 // Returns an instance of logger that can be used for storing informational
 // messages.

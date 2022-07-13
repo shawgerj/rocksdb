@@ -222,4 +222,6 @@ class FaultInjectionEnv : public EnvWrapper {
   Status error_;
 };
 
+FaultInjectionEnv* NewFaultInjectionEnv(Env* base_env);
+
 }  // namespace rocksdb
