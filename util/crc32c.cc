@@ -340,19 +340,19 @@ static inline void Slow_CRC32(uint64_t* l, uint8_t const **p) {
   table0_[c >> 24];
 }
 
-// static inline void Fast_CRC32(uint64_t* l, uint8_t const **p) {
-// #ifndef HAVE_SSE42
-//   Slow_CRC32(l, p);
-// #elif defined(__LP64__) || defined(_WIN64)
-//   *l = _mm_crc32_u64(*l, LE_LOAD64(*p));
-//   *p += 8;
-// #else
-//   *l = _mm_crc32_u32(static_cast<unsigned int>(*l), LE_LOAD32(*p));
-//   *p += 4;
-//   *l = _mm_crc32_u32(static_cast<unsigned int>(*l), LE_LOAD32(*p));
-//   *p += 4;
-// #endif
-// }
+static inline void Fast_CRC32(uint64_t* l, uint8_t const **p) {
+#ifndef HAVE_SSE42
+  Slow_CRC32(l, p);
+#elif defined(__LP64__) || defined(_WIN64)
+  *l = _mm_crc32_u64(*l, LE_LOAD64(*p));
+  *p += 8;
+#else
+  *l = _mm_crc32_u32(static_cast<unsigned int>(*l), LE_LOAD32(*p));
+  *p += 4;
+  *l = _mm_crc32_u32(static_cast<unsigned int>(*l), LE_LOAD32(*p));
+  *p += 4;
+#endif
+}
 
 template<void (*CRC32)(uint64_t*, uint8_t const**)>
 uint32_t ExtendImpl(uint32_t crc, const char* buf, size_t size) {
