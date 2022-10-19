@@ -18,6 +18,10 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/options.h"
 #include "../util/random.h"
+#include "raftlog.h"
+
+#define DB_SIZE  (32L * 1024 * 1024 * 1024)
+#define RL_SIZE  (128)
 
 using namespace rocksdb;
 
@@ -426,12 +430,90 @@ int testOneDBMultiValue() {
     return 1;
 }
 
+int doBenchmark(size_t value_size, bool shared_log, bool disable_wal) {
+    std::string log1 = "/tmp/vlog1.txt";
+    std::string log2;
+    if (shared_log)
+        log2 = log1;
+    else
+        log2 = "/tmp/vlog2.txt";
+
+    Options dbOptions;
+    dbOptions.IncreaseParallelism();
+    dbOptions.OptimizeLevelStyleCompaction();
+    dbOptions.create_if_missing = true;
+
+    auto raftdb = std::make_unique<SharedLogDB>(raftDBPath, log1, dbOptions);
+    auto kvdb = std::make_unique<SharedLogDB>(kvDBPath, log2, dbOptions);
+    RandomGenerator gen;
+    WriteOptions wopts = WriteOptions();
+    wopts.disableWAL = disable_wal;
+    
+    auto raftlog = std::make_unique<RaftLog>(RL_SIZE);
+    size_t nfill = (size_t)DB_SIZE / value_size;
+    size_t p1 = nfill / 40;
+    clock_t t0 = clock();
+    
+    // start producer thread
+    std::thread producer([&] {
+        off_t offset;
+        for (size_t i = 0; i < nfill; i++) {
+            Slice key = gen.Generate(16);
+            Slice val = gen.Generate(value_size);
+            Slice o;
+            raftdb->Put(WriteOptions(), key, val, &offset);
+
+            RaftEntry e;
+            e.set_key(key);
+            if (shared_log) {
+                o = Slice(std::to_string(offset));
+                e.set_value(o);
+            }
+            else {
+                e.set_value(val);
+            }
+
+            raftlog->push(e);
+        }
+    });
+
+    // start consumer thread
+    std::thread consumer([&] {
+        off_t offset;
+        for (size_t i = 0; i < nfill; i++) {
+            auto e = raftlog->pop();
+            Slice key = e->get_key();
+            Slice value = e->get_value();
+
+            if (shared_log)
+                kvdb->PutNoLog(wopts, key, value);
+            else
+                kvdb->Put(wopts, key, value, &offset);
+                    
+            if (i >= p1) {
+                clock_t dt = clock() - t0;
+                std::cout << "value_size\t" << value_size << "\tnum_keys\t" << i+1
+                          << "\telapsed_time\t" << dt * 1.0e-6 << std::endl;
+                p1 += (nfill / 40);
+            }
+            
+        }
+    });
+
+    producer.join();
+    consumer.join();
+    
+    return 1;
+}
+
 int main() {
     assert(testOneDBOneValue() == 1);
     assert(testOneDBMultiValue() == 1);
     assert(testTwoDBOneValue() == 1);
     assert(testTwoDBSVLOneValue() == 1);
     assert(testTwoDBSVLMultiValue() == 1);
+
+    assert(doBenchmark(1024, false, false));
 
     return 0;
 }
