@@ -13,6 +13,7 @@
 #include <string>
 #include <iostream>
 #include <thread>
+#include <algorithm>
 
 #include "rocksdb/db.h"
 #include "rocksdb/slice.h"
@@ -25,9 +26,16 @@
 
 using namespace rocksdb;
 
-std::string raftDBPath = "/tmp/rocksdb_raftdb";
-std::string kvDBPath = "/tmp/rocksdb_kvdb";
+std::string rootDir = "/mydata";
+std::string raftDBPath = rootDir + "/rocksdb_raftdb";
+std::string kvDBPath = rootDir + "/rocksdb_kvdb";
 Options globalDBOptions;
+Random64 myrand(0);
+const int key_size_ = sizeof(uint64_t);
+
+enum WriteMode {
+    RANDOM, SEQUENTIAL, UNIQUE_RANDOM
+};
 
 class KVPair {
 public:
@@ -42,6 +50,74 @@ private:
     Slice _key;
     Slice _value;
 };
+
+
+
+// from db_bench_tool.cc
+class KeyGenerator {
+public:
+    KeyGenerator(Random64* rand, WriteMode mode, uint64_t num,
+                 uint64_t /*num_per_set*/ = 64 * 1024)
+        : rand_(rand), mode_(mode), num_(num), next_(0) {
+        if (mode_ == UNIQUE_RANDOM) {
+            // NOTE: if memory consumption of this approach becomes a concern,
+            // we can either break it into pieces and only random shuffle a section
+            // each time. Alternatively, use a bit map implementation
+            // (https://reviews.facebook.net/differential/diff/54627/)
+            values_.resize(num_);
+            for (uint64_t i = 0; i < num_; ++i) {
+                values_[i] = i;
+            }
+            std::shuffle(
+                values_.begin(), values_.end(),
+                std::default_random_engine(static_cast<unsigned int>(0)));
+        }
+    }
+
+    uint64_t Next() {
+        switch (mode_) {
+        case SEQUENTIAL:
+            return next_++;
+        case RANDOM:
+            return rand_->Next() % num_;
+        case UNIQUE_RANDOM:
+            assert(next_ < num_);
+            return values_[next_++];
+        }
+        assert(false);
+        return std::numeric_limits<uint64_t>::max();
+    }
+
+private:
+    Random64* rand_;
+    WriteMode mode_;
+    const uint64_t num_;
+    uint64_t next_;
+    std::vector<uint64_t> values_;
+};
+
+Slice AllocateKey(std::unique_ptr<const char[]>* key_guard) {
+    char* data = new char[key_size_];
+    const char* const_data = data;
+    key_guard->reset(const_data);
+    return Slice(key_guard->get(), key_size_);
+}
+// from db_bench_tool.cc. Simplified for my purposes
+// If keys_per_prefix_ is 0, the key is simply a binary representation of
+// random number followed by trailing '0's
+//   ----------------------------
+//   |        key 00000         |
+//   ----------------------------
+void GenerateKeyFromInt(uint64_t v, Slice* key) {
+    char* start = const_cast<char*>(key->data());
+    char* pos = start;
+    int bytes_to_fill = std::min(key_size_, 8);
+    memcpy(pos, static_cast<void*>(&v), bytes_to_fill);
+    pos += bytes_to_fill;
+    if (key_size_ > pos - start) {
+        memset(pos, '0', key_size_ - (pos - start));
+    }
+}
 
 // Helper for quickly generating random data.
 // Taken from tools/db_bench_tool.cc
@@ -240,7 +316,7 @@ int testTwoDBSVLMultiValue() {
     dbOptions.create_if_missing = true;
     int value_size = 32;
 
-    std::string logfile = "/tmp/vlog1.txt";
+    std::string logfile = rootDir + "/vlog1.txt";
     
     auto db1 = std::make_unique<SharedLogDB>(raftDBPath, logfile, dbOptions);
     auto db2 = std::make_unique<SharedLogDB>(kvDBPath, logfile, dbOptions);
@@ -295,7 +371,7 @@ int testTwoDBSVLOneValue() {
     dbOptions.OptimizeLevelStyleCompaction();
     dbOptions.create_if_missing = true;
 
-    std::string logfile1 = "/tmp/vlog1.txt";
+    std::string logfile1 = rootDir + "/vlog1.txt";
     
     auto db1 = std::make_unique<SharedLogDB>(raftDBPath, logfile1, dbOptions);
     auto db2 = std::make_unique<SharedLogDB>(kvDBPath, logfile1, dbOptions);
@@ -329,8 +405,8 @@ int testTwoDBOneValue() {
     dbOptions.OptimizeLevelStyleCompaction();
     dbOptions.create_if_missing = true;
 
-    std::string logfile1 = "/tmp/vlog1.txt";
-    std::string logfile2 = "/tmp/vlog2.txt";
+    std::string logfile1 = rootDir + "/vlog1.txt";
+    std::string logfile2 = rootDir + "/vlog2.txt";
     
     auto db1 = std::make_unique<SharedLogDB>(raftDBPath, logfile1, dbOptions);
     auto db2 = std::make_unique<SharedLogDB>(kvDBPath, logfile2, dbOptions);
@@ -363,7 +439,7 @@ int testOneDBOneValue() {
     dbOptions.OptimizeLevelStyleCompaction();
     dbOptions.create_if_missing = true;
 
-    std::string logfile = "/tmp/vlog1.txt";
+    std::string logfile = rootDir + "/vlog1.txt";
     
     auto raftdb = std::make_unique<SharedLogDB>(raftDBPath, logfile, dbOptions);
 
@@ -391,7 +467,7 @@ int testOneDBMultiValue() {
     dbOptions.create_if_missing = true;
     int value_size = 32;
 
-    std::string logfile = "/tmp/vlog1.txt";
+    std::string logfile = rootDir + "/vlog1.txt";
     
     auto raftdb = std::make_unique<SharedLogDB>(raftDBPath, logfile, dbOptions);
 
@@ -430,13 +506,13 @@ int testOneDBMultiValue() {
     return 1;
 }
 
-int doBenchmark(size_t value_size, bool shared_log, bool disable_wal) {
-    std::string log1 = "/tmp/vlog1.txt";
+int doBenchmark(size_t value_size, bool shared_log, bool wal) {
+    std::string log1 = rootDir + "/vlog1.txt";
     std::string log2;
     if (shared_log)
         log2 = log1;
     else
-        log2 = "/tmp/vlog2.txt";
+        log2 = rootDir + "/vlog2.txt";
 
     Options dbOptions;
     dbOptions.IncreaseParallelism();
@@ -447,17 +523,25 @@ int doBenchmark(size_t value_size, bool shared_log, bool disable_wal) {
     auto kvdb = std::make_unique<SharedLogDB>(kvDBPath, log2, dbOptions);
     RandomGenerator gen;
     WriteOptions wopts = WriteOptions();
-    wopts.disableWAL = disable_wal;
+    wopts.disableWAL = !wal;
     
     auto raftlog = std::make_unique<RaftLog>(RL_SIZE);
     size_t nfill = (size_t)DB_SIZE / value_size;
+    std::unique_ptr<KeyGenerator> keygen;
+    keygen.reset(new KeyGenerator(&myrand, UNIQUE_RANDOM, nfill));
+
     size_t p1 = nfill / 40;
     clock_t t0 = clock();
     
     // start producer thread
     std::thread producer([&] {
         off_t offset;
+        std::unique_ptr<const char[]> key_guard;
+        Slice key = AllocateKey(&key_guard);
+
         for (size_t i = 0; i < nfill; i++) {
+            int64_t rand_num = keygen->Next();
+            GenerateKeyFromInt(rand_num, &key);
             Slice key = gen.Generate(16);
             Slice val = gen.Generate(value_size);
             Slice o;
@@ -506,14 +590,41 @@ int doBenchmark(size_t value_size, bool shared_log, bool disable_wal) {
     return 1;
 }
 
-int main() {
-    assert(testOneDBOneValue() == 1);
-    assert(testOneDBMultiValue() == 1);
-    assert(testTwoDBOneValue() == 1);
-    assert(testTwoDBSVLOneValue() == 1);
-    assert(testTwoDBSVLMultiValue() == 1);
+int main(int argc, char *argv[]) {
+    // assert(testOneDBOneValue() == 1);
+    // assert(testOneDBMultiValue() == 1);
+    // assert(testTwoDBOneValue() == 1);
+    // assert(testTwoDBSVLOneValue() == 1);
+    // assert(testTwoDBSVLMultiValue() == 1);
 
-    assert(doBenchmark(1024, false, false));
+    
+    if (argc < 3) {
+        std::cout << "Usage: " << argv[0] << " -v <value_size> [-s] [-w]" << std::endl;
+        exit(0);
+    }
 
+    size_t value_size;
+    bool shared_log = false;
+    bool wal = true;
+    int arg;
+
+    while ((arg = getopt(argc, argv, "v:sw")) != -1) {
+        switch (arg) {
+        case 'v':
+            value_size = std::stoull(optarg, NULL, 10);
+            break;
+        case 's':
+            shared_log = true;
+            break;
+        case 'w':
+            wal = true;
+            break;
+        default:
+            std::cout << "Illegal command line option, exiting." << std::endl;
+            return 1;
+        }
+    }
+
+    doBenchmark(value_size, shared_log, wal);
     return 0;
 }
