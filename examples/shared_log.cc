@@ -26,7 +26,7 @@
 
 using namespace rocksdb;
 
-std::string rootDir = "/mydata";
+std::string rootDir = "/tmp";
 std::string raftDBPath = rootDir + "/rocksdb_raftdb";
 std::string kvDBPath = rootDir + "/rocksdb_kvdb";
 Options globalDBOptions;
@@ -532,7 +532,9 @@ int doBenchmark(size_t value_size, bool shared_log, bool wal) {
 
     size_t p1 = nfill / 40;
     clock_t t0 = clock();
-    
+
+    std::cout << "Running with value size: " << value_size << " Shared log: "
+              << shared_log << " WAL Enabled: " << wal << std::endl;
     // start producer thread
     std::thread producer([&] {
         off_t offset;
@@ -542,7 +544,6 @@ int doBenchmark(size_t value_size, bool shared_log, bool wal) {
         for (size_t i = 0; i < nfill; i++) {
             int64_t rand_num = keygen->Next();
             GenerateKeyFromInt(rand_num, &key);
-            Slice key = gen.Generate(16);
             Slice val = gen.Generate(value_size);
             Slice o;
             raftdb->Put(WriteOptions(), key, val, &offset);
@@ -591,11 +592,11 @@ int doBenchmark(size_t value_size, bool shared_log, bool wal) {
 }
 
 int main(int argc, char *argv[]) {
-    // assert(testOneDBOneValue() == 1);
-    // assert(testOneDBMultiValue() == 1);
-    // assert(testTwoDBOneValue() == 1);
-    // assert(testTwoDBSVLOneValue() == 1);
-    // assert(testTwoDBSVLMultiValue() == 1);
+    assert(testOneDBOneValue() == 1);
+    assert(testOneDBMultiValue() == 1);
+    assert(testTwoDBOneValue() == 1);
+    assert(testTwoDBSVLOneValue() == 1);
+    assert(testTwoDBSVLMultiValue() == 1);
 
     
     if (argc < 3) {
