@@ -26,7 +26,7 @@
 
 using namespace rocksdb;
 
-std::string rootDir = "/tmp";
+std::string rootDir = "/mydata";
 std::string raftDBPath = rootDir + "/rocksdb_raftdb";
 std::string kvDBPath = rootDir + "/rocksdb_kvdb";
 Options globalDBOptions;
@@ -533,8 +533,7 @@ int doBenchmark(size_t value_size, bool shared_log, bool wal) {
     size_t p1 = nfill / 40;
     clock_t t0 = clock();
 
-    std::cout << "Running with value size: " << value_size << " Shared log: "
-              << shared_log << " WAL Enabled: " << wal << std::endl;
+    std::cout << "#\tvsize\tnum_keys\telapsed_time" << std::endl;
     // start producer thread
     std::thread producer([&] {
         off_t offset;
@@ -577,8 +576,7 @@ int doBenchmark(size_t value_size, bool shared_log, bool wal) {
                     
             if (i >= p1) {
                 clock_t dt = clock() - t0;
-                std::cout << "value_size\t" << value_size << "\tnum_keys\t" << i+1
-                          << "\telapsed_time\t" << dt * 1.0e-6 << std::endl;
+                std::cout << value_size << "\t" << i+1 << "\t" << dt * 1.0e-6 << std::endl;
                 p1 += (nfill / 40);
             }
             
@@ -587,16 +585,18 @@ int doBenchmark(size_t value_size, bool shared_log, bool wal) {
 
     producer.join();
     consumer.join();
-    
+
+    DestroySharedDB(raftDBPath, log1, dbOptions);
+    DestroySharedDB(kvDBPath, log2, dbOptions);
     return 1;
 }
 
 int main(int argc, char *argv[]) {
-    assert(testOneDBOneValue() == 1);
-    assert(testOneDBMultiValue() == 1);
-    assert(testTwoDBOneValue() == 1);
-    assert(testTwoDBSVLOneValue() == 1);
-    assert(testTwoDBSVLMultiValue() == 1);
+    // assert(testOneDBOneValue() == 1);
+    // assert(testOneDBMultiValue() == 1);
+    // assert(testTwoDBOneValue() == 1);
+    // assert(testTwoDBSVLOneValue() == 1);
+    // assert(testTwoDBSVLMultiValue() == 1);
 
     
     if (argc < 3) {
@@ -606,7 +606,7 @@ int main(int argc, char *argv[]) {
 
     size_t value_size;
     bool shared_log = false;
-    bool wal = true;
+    bool wal = false;
     int arg;
 
     while ((arg = getopt(argc, argv, "v:sw")) != -1) {
